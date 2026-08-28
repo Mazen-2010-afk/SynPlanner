@@ -5,7 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Added `synplan.chem.reaction.rules.symmetry` with
+  `needs_decollapsed_matches()` for detecting reaction SMARTS where an exact
+  non-identity left-hand-side automorphism changes the right-hand-side product
+  rule patch.
+
 ### Changed
+
+- `load_reaction_rules()` now parses each TSV SMARTS once and disables Chython's
+  `automorphism_filter` only when exact rule symmetry would otherwise collapse
+  chemically distinct matches. Callers can retain Chython's default behavior with
+  `decollapse_symmetric_matches=False`; pickle loading is unchanged.
+
+- Rule extraction now derives popularity, retained reaction indices, the
+  representative rule, and policy-training rows only from occurrences where
+  reactor validation is disabled or passed. Failed and deliberately skipped
+  validation occurrences remain available for per-reaction auditing but do not
+  contribute support, so results do not depend on whether an ineligible occurrence
+  is ingested first.
 
 - The reactor no longer puts back aromaticity a `kekule` -> `thiele` round trip
   dropped. Its test was "these ring atoms were aromatic and are not now", which is
@@ -69,6 +88,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   arithmetically the plain product.
 
 ### Fixed
+
+- Fixed symmetric SMARTS rule loading where Chython's default automorphism
+  filtering treated two atom assignments as duplicates because they matched the
+  same set of target atoms, even though the rule mapped those atoms to
+  chemically distinct precursors. In a Suzuki retrosynthesis, a symmetric product
+  C-C bond can match the template in two orientations: one puts the halide on the
+  first aryl fragment and the boronic-acid handle on the second; the other swaps
+  those handles. Both precursor sets are chemically valid, but Chython discarded
+  the second mapping. SynPlanner now detects exact left-hand-side automorphisms
+  that change the right-hand-side rule patch and disables the filter only for
+  affected rules. This retains both Suzuki precursor orientations, as well as
+  external-fragment differences, target-target bond changes, and target atom-state
+  changes, while preserving ordinary match deduplication for other rules.
+
+- The deprecated `synplan.chem.reaction_rules` compatibility package again
+  explicitly forwards the existing `rule_query_pattern` helper and lists it in
+  `__all__`, while the new symmetry helper remains canonical-package-only.
+
+- Extraction audits now report the cause of rejection rather than source topology:
+  a combined multicenter rule that runs validation and fails is
+  `ReactorValidationFailed`; only split component rules, for which full-reaction
+  validation is deliberately skipped, are `MultiCenter`. The aggregate summary
+  reports that such rules have no validation-eligible occurrences.
 
 - The GUI's "Generate full HTML report" button lost its protection ranking when the
   scorer came off the `Tree`, and the report came out in search order with nobody told.
